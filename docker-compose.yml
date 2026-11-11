@@ -1,0 +1,195 @@
+services:
+  # ---------------------------------------------------------------------------
+  # 1. Corporate Egress Proxy (Squid with SSL Bump / HTTPS Inspection)
+  #    Sits between the isolated CD network and the outside internet/corp net.
+  #    Blocks all domains except those in ./proxy/allowed-domains.txt.
+  # ---------------------------------------------------------------------------
+  proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    container_name: corp-egress-proxy
+    volumes:
+      - ./proxy/squid.conf:/etc/squid/squid.conf:ro
+      - ./proxy/allowed-domains.txt:/etc/squid/allowed-domains.txt:ro
+      - ./proxy/certs:/etc/squid/certs:ro
+    networks:
+      - isolated_cd_net
+      - external_net
+
+  # ---------------------------------------------------------------------------
+  # 2. Mock Artifactory Server (Nginx)
+  #    Simulates your internal corporate Artifactory server hosting AAB/IPA.
+  #    Lives on external_net so the CD container CANNOT reach it directly —
+  #    it must go through the Squid proxy.
+  # ---------------------------------------------------------------------------
+  artifactory:
+    image: nginx:alpine
+    container_name: mock-artifactory
+    volumes:
+      - ./mock-artifactory:/usr/share/nginx/html:ro
+    networks:
+      external_net:
+        aliases:
+          - artifactory.corp.internal
+
+  # ---------------------------------------------------------------------------
+  # Track 1: Firebase App Distribution — Android AAB (Pure Bash + REST API)
+  # ---------------------------------------------------------------------------
+  firebase-aab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: firebase-aab
+    entrypoint: ["/usr/local/bin/entrypoint-firebase-aab.sh"]
+    depends_on:
+      - proxy
+      - artifactory
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/service-account.json
+      - HTTP_PROXY=http://proxy:3128
+      - HTTPS_PROXY=http://proxy:3128
+      - http_proxy=http://proxy:3128
+      - https_proxy=http://proxy:3128
+    volumes:
+      - ./credentials:/credentials:ro
+    networks:
+      - isolated_cd_net
+
+  # ---------------------------------------------------------------------------
+  # Track 2: Firebase App Distribution — iOS IPA (Pure Bash + REST API)
+  # ---------------------------------------------------------------------------
+  firebase-ipa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: firebase-ipa
+    entrypoint: ["/usr/local/bin/entrypoint-firebase-ipa.sh"]
+    depends_on:
+      - proxy
+      - artifactory
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/service-account.json
+      - HTTP_PROXY=http://proxy:3128
+      - HTTPS_PROXY=http://proxy:3128
+      - http_proxy=http://proxy:3128
+      - https_proxy=http://proxy:3128
+    volumes:
+      - ./credentials:/credentials:ro
+    networks:
+      - isolated_cd_net
+
+  # ---------------------------------------------------------------------------
+  # Track 3: Google Play Console — Android AAB (Pure Bash + REST API)
+  # ---------------------------------------------------------------------------
+  playstore-aab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: playstore-aab
+    entrypoint: ["/usr/local/bin/entrypoint-playstore-aab.sh"]
+    depends_on:
+      - proxy
+      - artifactory
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/service-account.json
+      - HTTP_PROXY=http://proxy:3128
+      - HTTPS_PROXY=http://proxy:3128
+      - http_proxy=http://proxy:3128
+      - https_proxy=http://proxy:3128
+    volumes:
+      - ./credentials:/credentials:ro
+    networks:
+      - isolated_cd_net
+
+  # ---------------------------------------------------------------------------
+  # Track 4: Apple App Store Connect — iOS IPA (Pure Bash + REST API)
+  # ---------------------------------------------------------------------------
+  appstore-ipa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: appstore-ipa
+    entrypoint: ["/usr/local/bin/entrypoint-appstore-ipa.sh"]
+    depends_on:
+      - proxy
+      - artifactory
+    env_file:
+      - .env
+    environment:
+      - APPSTORE_PRIVATE_KEY_PATH=/credentials/AuthKey.p8
+      - HTTP_PROXY=http://proxy:3128
+      - HTTPS_PROXY=http://proxy:3128
+      - http_proxy=http://proxy:3128
+      - https_proxy=http://proxy:3128
+    volumes:
+      - ./credentials:/credentials:ro
+    networks:
+      - isolated_cd_net
+
+  # ---------------------------------------------------------------------------
+  # Track 5: Huawei AppGallery Connect — Android AAB/APK (Pure Bash + REST API)
+  # ---------------------------------------------------------------------------
+  appgallery-aab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: appgallery-aab
+    entrypoint: ["/usr/local/bin/entrypoint-appgallery-aab.sh"]
+    depends_on:
+      - proxy
+      - artifactory
+    env_file:
+      - .env
+    environment:
+      - HUAWEI_CREDENTIALS_FILE=/credentials/huawei-api-client.json
+      - HTTP_PROXY=http://proxy:3128
+      - HTTPS_PROXY=http://proxy:3128
+      - http_proxy=http://proxy:3128
+      - https_proxy=http://proxy:3128
+    volumes:
+      - ./credentials:/credentials:ro
+    networks:
+      - isolated_cd_net
+
+  # ---------------------------------------------------------------------------
+  # Track 6: Firebase Crashlytics — R8/ProGuard Mapping Upload (Standalone Firebase CLI)
+  # ---------------------------------------------------------------------------
+  crashlytics-mapping:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.crashlytics
+    container_name: crashlytics-mapping
+    entrypoint: ["/usr/local/bin/entrypoint-crashlytics-mapping.sh"]
+    depends_on:
+      - proxy
+      - artifactory
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/service-account.json
+      - HTTP_PROXY=http://proxy:3128
+      - HTTPS_PROXY=http://proxy:3128
+      - http_proxy=http://proxy:3128
+      - https_proxy=http://proxy:3128
+    volumes:
+      - ./credentials:/credentials:ro
+    networks:
+      - isolated_cd_net
+
+networks:
+  # Strictly isolated network: containers here have NO gateway to the internet
+  isolated_cd_net:
+    driver: bridge
+    internal: true
+
+  # External network: Only the proxy (and mock artifactory) connect here
+  external_net:
+    driver: bridge

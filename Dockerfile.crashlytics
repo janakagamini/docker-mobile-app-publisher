@@ -1,0 +1,51 @@
+# Base image: Debian Linux with OpenJDK JRE + Standalone Firebase CLI Binary
+# Used exclusively for Track 6: Firebase Crashlytics ProGuard/R8 Mapping Upload
+# Note: Google's standalone `firebase-tools-linux` binary is compiled for x86_64 (linux/amd64)
+FROM --platform=linux/amd64 debian:bookworm-slim
+
+ARG FIREBASE_CLI_VERSION=v13.29.1
+ARG CRASHLYTICS_BUILDTOOLS_VERSION=3.0.2
+
+# 1. Install CLI & runtime dependencies:
+#    - bash, curl, ca-certificates: HTTP artifact download & TLS validation
+#    - default-jre-headless, ca-certificates-java: Required because
+#      `firebase crashlytics:mappingfile:upload` invokes `java -jar crashlytics-buildtools.jar`
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      bash \
+      curl \
+      ca-certificates \
+      ca-certificates-java \
+      default-jre-headless && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. Trust the Corporate Root CA for HTTPS Interception (SSL Inspection / MITM)
+#    - update-ca-certificates updates both OS trust store and Java cacerts (via ca-certificates-java)
+#    - NODE_EXTRA_CA_CERTS instructs the standalone Firebase CLI's embedded Node.js runtime to trust it
+COPY proxy/certs/corp-root-ca.crt /usr/local/share/ca-certificates/corp-root-ca.crt
+RUN update-ca-certificates
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/corp-root-ca.crt
+
+# 3. Install the Standalone Firebase CLI binary (pinned version)
+RUN curl --fail --show-error --location \
+      "https://github.com/firebase/firebase-tools/releases/download/${FIREBASE_CLI_VERSION}/firebase-tools-linux" \
+      --output /usr/local/bin/firebase && \
+    chmod +x /usr/local/bin/firebase
+
+# 4. Pre-cache crashlytics-buildtools.jar in a world-readable path at build time.
+#    Note: `firebase-tools` calls `downgrade-root` on startup (dropping UID 0 -> 65534/nobody),
+#    so the cached JAR and working directory must be accessible to non-root UIDs.
+ENV FIREBASE_CRASHLYTICS_BUILDTOOLS_PATH=/usr/local/share/firebase/crashlytics/buildtools
+RUN mkdir -p "${FIREBASE_CRASHLYTICS_BUILDTOOLS_PATH}" && \
+    curl --fail --show-error --location \
+      "https://dl.google.com/android/maven2/com/google/firebase/firebase-crashlytics-buildtools/${CRASHLYTICS_BUILDTOOLS_VERSION}/firebase-crashlytics-buildtools-${CRASHLYTICS_BUILDTOOLS_VERSION}.jar" \
+      --output "${FIREBASE_CRASHLYTICS_BUILDTOOLS_PATH}/crashlytics-buildtools-${CRASHLYTICS_BUILDTOOLS_VERSION}.jar" && \
+    chmod -R a+rX /usr/local/share/firebase /root
+
+# 5. Copy the Crashlytics mapping upload entrypoint script
+COPY entrypoint-crashlytics-mapping.sh /usr/local/bin/entrypoint-crashlytics-mapping.sh
+RUN chmod +x /usr/local/bin/entrypoint-crashlytics-mapping.sh
+
+WORKDIR /workspace
+RUN chmod 1777 /workspace
+ENTRYPOINT ["/usr/local/bin/entrypoint-crashlytics-mapping.sh"]

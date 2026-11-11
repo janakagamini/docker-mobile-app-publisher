@@ -1,0 +1,91 @@
+# =============================================================================
+# CORPORATE EGRESS FIREWALL ALLOWLIST
+# =============================================================================
+# All egress traffic from isolated_cd_net is blocked by Squid unless matched by
+# a domain below.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Artifactory Binary Download (All Tracks)
+#    Required to download the compiled mobile binary (.aab / .ipa) or mapping.txt:
+#      - GET http://artifactory.corp.internal/generic-local/...
+# -----------------------------------------------------------------------------
+artifactory.corp.internal
+
+# -----------------------------------------------------------------------------
+# 2. Google OAuth2 Token Exchange (Tracks 1, 2, 3)
+#    Required to exchange the locally signed RS256 Service Account JWT for a
+#    short-lived OAuth2 Bearer token:
+#      - POST https://oauth2.googleapis.com/token
+# -----------------------------------------------------------------------------
+oauth2.googleapis.com
+
+# -----------------------------------------------------------------------------
+# 3. Firebase App Distribution v1 REST API (Track 1: Firebase AAB & Track 2: Firebase IPA)
+#    Required for binary upload, long-running operation polling, release notes,
+#    and tester/group distribution:
+#      - POST  https://firebaseappdistribution.googleapis.com/upload/v1/projects/{projectNumber}/apps/{appId}/releases:upload
+#      - GET   https://firebaseappdistribution.googleapis.com/v1/{operationName}
+#      - PATCH https://firebaseappdistribution.googleapis.com/v1/{releaseName}?updateMask=release_notes.text
+#      - POST  https://firebaseappdistribution.googleapis.com/v1/{releaseName}:distribute
+# -----------------------------------------------------------------------------
+firebaseappdistribution.googleapis.com
+
+# -----------------------------------------------------------------------------
+# 4. Google Play Android Publisher v3 REST API (Track 3: Google Play Store AAB)
+#    Required for all 4 Google Play publishing steps on a single host:
+#      - POST https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{packageName}/edits
+#      - POST https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/{packageName}/edits/{editId}/bundles?uploadType=media
+#      - PUT  https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{packageName}/edits/{editId}/tracks/{track}
+#      - POST https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{packageName}/edits/{editId}:commit
+# -----------------------------------------------------------------------------
+androidpublisher.googleapis.com
+
+# -----------------------------------------------------------------------------
+# 5. Apple App Store Connect REST API (Track 4: Apple App Store Connect IPA)
+#    Required to create the buildUpload session, reserve the .ipa file (and
+#    retrieve pre-signed chunk upload URLs), commit the uploaded build, and
+#    poll the buildUpload processing/validation status:
+#      - POST  https://api.appstoreconnect.apple.com/v1/buildUploads
+#      - POST  https://api.appstoreconnect.apple.com/v1/buildUploadFiles
+#      - PATCH https://api.appstoreconnect.apple.com/v1/buildUploadFiles/{id}
+#      - GET   https://api.appstoreconnect.apple.com/v1/buildUploads/{id}
+# -----------------------------------------------------------------------------
+api.appstoreconnect.apple.com
+
+# -----------------------------------------------------------------------------
+# 6. Apple Object Storage — Pre-Signed Binary Chunk Upload (Track 4: Apple App Store Connect IPA)
+#    Returned dynamically in uploadOperations[].url by POST /v1/buildUploadFiles
+#    for uploading the raw .ipa byte chunks:
+#      - PUT https://northamerica-1.object-storage.apple.com/itms-assets-prod-200001/...
+# -----------------------------------------------------------------------------
+.object-storage.apple.com
+
+# -----------------------------------------------------------------------------
+# 7. Huawei AppGallery Connect Publishing v2 REST API (Track 5: Huawei AppGallery AAB/APK)
+#    Required for OAuth2 client_credentials token exchange, requesting a
+#    pre-signed OBS upload URL, binding the uploaded binary to the app draft,
+#    and optionally submitting the release for review:
+#      - POST https://connect-api.cloud.huawei.com/api/oauth2/v1/token
+#      - GET  https://connect-api.cloud.huawei.com/api/publish/v2/upload-url/for-obs
+#      - PUT  https://connect-api.cloud.huawei.com/api/publish/v2/app-file-info
+#      - POST https://connect-api.cloud.huawei.com/api/publish/v2/app-submit
+# -----------------------------------------------------------------------------
+connect-api.cloud.huawei.com
+
+# -----------------------------------------------------------------------------
+# 8. Huawei Cloud OBS — Pre-Signed Binary Upload (Track 5: Huawei AppGallery AAB/APK)
+#    Returned dynamically in urlInfo.url by GET /api/publish/v2/upload-url/for-obs
+#    for uploading the raw .aab / .apk binary with SigV4 headers:
+#      - PUT https://nsp-appgallery-agcfs-dra.obs.ap-southeast-3.myhuaweicloud.com/SG/... (observed)
+#        The OBS region/bucket varies with the app's release countries, so allow the wildcard.
+# -----------------------------------------------------------------------------
+.myhuaweicloud.com
+
+# -----------------------------------------------------------------------------
+# 9. Firebase Crashlytics Mapping / Symbol Upload (Track 6: Crashlytics Mapping CLI)
+#    Required by the standalone Firebase CLI (`firebase crashlytics:mappingfile:upload`
+#    -> `crashlytics-buildtools.jar`) when uploading R8/ProGuard mapping.txt:
+#      - PUT https://firebasecrashlyticssymbols.googleapis.com/v1/project/-/app/{appId}/upload/java/{mappingFileId}
+# -----------------------------------------------------------------------------
+firebasecrashlyticssymbols.googleapis.com

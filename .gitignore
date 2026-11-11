@@ -1,0 +1,85 @@
+# =============================================================================
+# Git Ignore Configuration - Docker Mobile App Publisher
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Environment Variables & Secrets
+# -----------------------------------------------------------------------------
+.env
+.env.*
+.env*.local
+!.env.example
+
+# -----------------------------------------------------------------------------
+# Secret Credentials, API Keys, Certificates, and Keystores
+# -----------------------------------------------------------------------------
+# The entire credentials/ folder is local-only (see README section 4.1)
+credentials/
+
+# Catch-all for private keys and certificates anywhere in the project
+*.key
+*.p8
+*.p12
+*.keystore
+*.jks
+*.mobileprovision
+
+# Keep the simulated test root CA used by the Squid SSL-bump container
+!proxy/certs/corp-root-ca.crt
+!proxy/certs/corp-root-ca.key
+!proxy/certs/corp-root-ca.pem
+
+# -----------------------------------------------------------------------------
+# Mobile Binaries, Archives & Build Outputs
+# -----------------------------------------------------------------------------
+# Never commit proprietary or heavyweight mobile binaries to the repo
+*.aab
+*.apk
+*.apks
+*.xapk
+*.ipa
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.dSYM/
+*.dSYM.zip
+
+# Obfuscation mapping & symbol files
+mapping.txt
+*.mapping
+com_google_firebase_crashlytics_mappingfileid.xml
+
+# Build logs and packaging metadata
+*.log
+*.plist
+
+# -----------------------------------------------------------------------------
+# Mock Artifactory Binaries and Test Runs
+# -----------------------------------------------------------------------------
+# Ignore all test payload directories and artifacts in mock-artifactory
+mock-artifactory/generic-local/*/*
+!mock-artifactory/**/.gitkeep
+
+# -----------------------------------------------------------------------------
+# OS & Editor Metadata / Backups
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+*.swp
+*~
+*.bak
+*.backup*
+
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+AGENTS.md
